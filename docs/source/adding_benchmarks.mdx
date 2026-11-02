@@ -59,6 +59,8 @@ All benchmarks are evaluated the same way by `lerobot-eval`:
 4. Results are aggregated hierarchically: episode, task, suite, overall.
 5. Metrics include `pc_success` (success rate), `avg_sum_reward`, and `avg_max_reward`. Every success rate is reported with its counts (`n_success` out of `n_episodes`) and a 95% Wilson interval in percent (`pc_success_ci95`), at task, suite and overall level. The interval covers sampling noise over episodes only; it says nothing about variation between training runs of the same recipe.
 
+6. Everything is written to `<output_dir>/eval_info.json`. With `--push_results_to_hub=true` (the default for runs submitted with `--job.target`, see [Evaluating on Hugging Face Jobs](./hardware_guide#evaluating-on-hugging-face-jobs)), the same file is uploaded to the policy's Hub repo under `eval/<env.type>-<env.task>/<UTC timestamp>/`, next to an `eval_metadata.json` recording the evaluated policy commit, lerobot version, seed and eval config.
+
 The critical piece: your env must return `info["is_success"]` on every `step()` call. This is how the eval loop knows whether a task was completed.
 
 ## What your environment must provide

@@ -19,6 +19,7 @@ from lerobot.utils.import_utils import require_package
 require_package("datasets", extra="dataset")
 
 from .annotate import submit_annotate_to_hf
+from .eval import submit_eval_to_hf
 from .hf import submit_to_hf
 
-__all__ = ["submit_annotate_to_hf", "submit_to_hf"]
+__all__ = ["submit_annotate_to_hf", "submit_eval_to_hf", "submit_to_hf"]

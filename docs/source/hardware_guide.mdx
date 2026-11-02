@@ -100,3 +100,22 @@ Notes:
 - `--job.target` maps onto the table above: `t4-small`/`t4-medium` (T4, ACT only), `l4x1`/`l4x4` (L4 24 GB), `a10g-small/large/largex2/largex4` (A10G 24 GB scaled out), `a100-large` (A100). List the current catalogue with pricing via `hf jobs hardware`, or see [https://huggingface.co/docs/hub/jobs](https://huggingface.co/docs/hub/jobs).
 - The job defaults to a `2d` (48h) timeout. Override it with `--job.timeout=4h` (or any other valid duration string) to shorten or extend the timeout. The job automatically stops when the command completes.
 - For the full walkthrough — dataset upload, checkpoint streaming, resuming a run on a job — see the [imitation-learning training guide](./il_robots#train-using-hugging-face-jobs).
+
+#### Evaluating on Hugging Face Jobs
+
+`lerobot-eval` takes the same `--job.*` flags, so a simulation benchmark runs on an HF GPU without a local simulator install (LIBERO, for instance, is Linux-only). The `huggingface/lerobot-gpu` image already ships the simulation extras and renders headless with `MUJOCO_GL=egl`:
+
+```bash
+lerobot-eval \
+  --policy.path=<USER>/<POLICY_REPO> \
+  --env.type=libero --env.task=libero_spatial \
+  --eval.batch_size=1 --eval.n_episodes=10 \
+  --job.target=a10g-small
+```
+
+- The policy must be on the Hub (`--policy.path=<user>/<repo>`); the job cannot read a local checkpoint folder. Upload one with `hf upload <user>/<repo> <path>/pretrained_model`.
+- When the evaluation ends, the job pushes its results to the policy repo under `eval/<env.type>-<env.task>/<UTC timestamp>/`: the unchanged `eval_info.json`, an `eval_metadata.json` with the evaluated policy commit, lerobot version, seed, episode count and full eval config, and one rollout video (`--results_max_videos=N` to change, `0` for none). The job's disk is discarded afterwards, so this is on by default for jobs; `--push_results_to_hub=false` leaves the results in the job logs only.
+- To evaluate a policy you cannot write to (e.g. `lerobot/...`), publish to your own repo with `--results_repo_id=<USER>/<REPO>`; it is created private if missing.
+- Evaluation jobs default to a `6h` timeout; raise it with `--job.timeout` for large protocols. `--job.detach`, `--job.tags` and `--job.image` work as for training.
+- `--job.lerobot_ref=<branch|tag|sha>` (with `--job.lerobot_repo=<git url>` for a fork) installs lerobot from git on the job before running, e.g. to evaluate with changes the image does not have yet.
+- A local run can publish the same way with `--push_results_to_hub=true`.

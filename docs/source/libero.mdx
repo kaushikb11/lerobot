@@ -86,6 +86,23 @@ lerobot-eval \
   --eval.n_episodes=2
 ```
 
+### Evaluating on Hugging Face Jobs
+
+LIBERO is Linux-only. To evaluate from another machine, or without a local GPU, run the same command on [Hugging Face Jobs](https://huggingface.co/docs/hub/jobs) by adding `--job.target`. The policy must be on the Hub, and the results are published to its repo under `eval/libero-<suites>/<UTC timestamp>/` (`eval_info.json` plus provenance in `eval_metadata.json`):
+
+```bash
+lerobot-eval \
+  --policy.path="your-policy-id" \
+  --env.type=libero \
+  --env.task=libero_spatial,libero_object,libero_goal,libero_10 \
+  --eval.batch_size=1 \
+  --eval.n_episodes=10 \
+  --job.target=a10g-small \
+  --job.timeout=8h
+```
+
+See [Evaluating on Hugging Face Jobs](./hardware_guide#evaluating-on-hugging-face-jobs) for the options.
+
 ### Control mode
 
 LIBERO supports two control modes — `relative` (default) and `absolute`. Different VLA checkpoints are trained with different action parameterizations, so make sure the mode matches your policy:

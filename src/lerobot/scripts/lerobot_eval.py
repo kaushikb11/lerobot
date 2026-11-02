@@ -46,6 +46,17 @@ lerobot-eval \
 
 Note that in both examples, the repo/folder should contain at least `config.json` and `model.safetensors` files.
 
+OR, you want to run the evaluation of a Hub policy on HF Jobs and publish the results to the policy's repo
+under `eval/<env.type>-<env.task>/<timestamp>/` (add `--push_results_to_hub=true` to a local run to do the same).
+```
+lerobot-eval \
+    --policy.path=<user>/diffusion_pusht \
+    --env.type=pusht \
+    --eval.batch_size=10 \
+    --eval.n_episodes=10 \
+    --job.target=a10g-small
+```
+
 You can learn about the CLI options for this script in the `EvalPipelineConfig` in lerobot/configs/eval.py
 """
 
@@ -72,7 +83,9 @@ from termcolor import colored
 from torch import Tensor, nn
 from tqdm import trange
 
+from lerobot.common.eval_results import push_eval_results, resolve_policy_revision, resolve_results_repo_id
 from lerobot.configs import FeatureType, PolicyFeature, parser
+from lerobot.configs.default import JobConfig
 from lerobot.configs.eval import EvalPipelineConfig
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.envs import (
@@ -83,6 +96,7 @@ from lerobot.envs import (
     preprocess_observation,
 )
 from lerobot.envs.utils import NEW_ROLLOUT_OPTION
+from lerobot.jobs import submit_eval_to_hf
 from lerobot.lerobot_types import PolicyAction
 from lerobot.policies import PreTrainedPolicy, make_policy, make_pre_post_processors
 from lerobot.processor import (
@@ -773,6 +787,10 @@ def _compile_episode_data(
 def eval_main(cfg: EvalPipelineConfig) -> None:
     logging.info(pformat(asdict(cfg)))
 
+    if cfg.job.is_remote:
+        submit_eval_to_hf(cfg)
+        return
+
     if cfg.policy is None:
         raise ValueError(
             "Evaluation requires a policy: pass --policy.path=<pretrained_dir> or --policy.type=<name>."
@@ -783,6 +801,13 @@ def eval_main(cfg: EvalPipelineConfig) -> None:
     if cfg.output_dir is None:
         # EvalPipelineConfig.__post_init__ always assigns a default output_dir.
         raise ValueError("EvalPipelineConfig.output_dir is not set.")
+
+    policy_revision: str | None = None
+    if cfg.should_push_results:
+        # Fail before evaluating when there is nowhere to publish, and pin the evaluated commit now:
+        # publishing adds a commit to the policy repo, so its head afterwards is a different revision.
+        resolve_results_repo_id(cfg)
+        policy_revision = resolve_policy_revision(cfg)
 
     # Check device is available
     device = get_safe_torch_device(cfg.policy.device, log=True)
@@ -873,6 +898,9 @@ def eval_main(cfg: EvalPipelineConfig) -> None:
     # Save info
     with open(Path(cfg.output_dir) / "eval_info.json", "w") as f:
         json.dump(info, f, indent=2)
+
+    if cfg.should_push_results:
+        push_eval_results(cfg, info, policy_revision=policy_revision)
 
     logging.info("End of eval")
 
@@ -1179,6 +1207,10 @@ def eval_policy_all(
 def main():
     init_logging()
     register_third_party_plugins()
+    if JobConfig.is_remote_target(parser.parse_arg("job.target")):
+        # The policy device is resolved on the HF Jobs pod, not here, so silence the client-side
+        # "Device '...' is not available" warning PreTrainedConfig emits while parsing the config.
+        logging.getLogger("lerobot.configs.policies").setLevel(logging.ERROR)
     eval_main()
 
 
